@@ -1,0 +1,26 @@
+machine:
+  environment:
+    GOPATH: /Users/travis/go
+    PATH: ${GOPATH}/bin:$PATH
+    GO15VENDOREXPERIMENT: 1
+    GOARCH: amd64
+    GOMAXPROCS: 8
+    GOOS: darwin
+    HOMEBREW_MAKE_JOBS: 9 
+  xcode:
+    version: "7.0"
+
+dependencies:
+  pre:
+    - brew tap zchee/libguestfs
+    - brew update
+    - brew outdated  go || brew upgrade go
+    - brew install libguestfs --with-go --devel --env=std
+    - go get -u github.com/tools/godep
+    - go get -d github.com/zchee/docker-machine-xhyve
+
+test:
+  override:
+    - uname -asnrvmpio
+    - cd $GOPATH/src/github.com/zchee/docker-machine-xhyve
+    - make install
