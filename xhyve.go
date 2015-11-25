@@ -8,7 +8,9 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"os/user"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -227,6 +229,7 @@ func (d *Driver) PreCreateCheck() error {
 }
 
 func (d *Driver) Create() error {
+	var err error
 	b2dutils := mcnutils.NewB2dUtils(d.StorePath)
 	if err := b2dutils.CopyIsoToMachineDir(d.Boot2DockerURL, d.MachineName); err != nil {
 		return err
@@ -251,18 +254,33 @@ func (d *Driver) Create() error {
 	// In order to avoid require sudo of vmnet.framework, Execute the root owner(and root uid)
 	// "docker-machine-xhyve" and "goxhyve" binary in golang.
 	log.Infof("Fix file permission...")
-	os.Chown(d.ResolveStorePath("."), 501, 20) //TODO Parse current user uid and gid
+	user, err := user.Current()
+	if err != nil {
+		return err
+	}
+
+	uid, err := strconv.Atoi(user.Uid)
+	if err != nil {
+		return err
+	}
+
+	gid, err := strconv.Atoi(user.Gid)
+	if err != nil {
+		return err
+	}
+
+	os.Chown(d.ResolveStorePath("."), uid, gid)
 	files, _ := ioutil.ReadDir(d.ResolveStorePath("."))
 	for _, f := range files {
 		log.Debugf(d.ResolveStorePath(f.Name()))
-		os.Chown(d.ResolveStorePath(f.Name()), 501, 20)
+		os.Chown(d.ResolveStorePath(f.Name()), uid, gid)
 	}
 
 	log.Infof("Generating disk image...")
 	if err := d.generateDiskImage(d.DiskSize); err != nil {
 		return err
 	}
-	os.Chown(d.ResolveStorePath(d.MachineName+".dmg"), 501, 20)
+	os.Chown(d.ResolveStorePath(d.MachineName+".dmg"), uid, gid)
 	log.Debugf("Created disk size: %dMB", d.DiskSize)
 
 	log.Infof("Generate UUID...")
@@ -281,7 +299,6 @@ func (d *Driver) Create() error {
 	log.Infof("Waiting for VM to come online...")
 
 	var ip string
-	var err error
 	for i := 1; i <= 60; i++ {
 		ip, err = d.getIPfromDHCPLease()
 		if err != nil {
